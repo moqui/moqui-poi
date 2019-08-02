@@ -28,12 +28,12 @@ import org.apache.poi.xssf.usermodel.XSSFCell
 import org.apache.poi.xssf.usermodel.XSSFRow
 import org.apache.poi.xssf.usermodel.XSSFSheet
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
+import org.moqui.entity.EntityValue
 import org.moqui.impl.context.ExecutionContextImpl
+import org.moqui.impl.entity.EntityDefinition
 import org.moqui.impl.screen.ScreenForm
 import org.moqui.util.MNode
 import org.moqui.util.StringUtilities
-
-import java.text.DateFormat
 
 /**
  * Generate an Excel (XLSX) file with form-list based output similar to CSV export.
@@ -55,16 +55,26 @@ class FormListExcelRender {
     }
 
     void render(OutputStream os) {
-        // get form-list data
-        ScreenForm.FormListRenderInfo formListInfo = formInstance.makeFormListRenderInfo()
-        MNode formNode = formListInfo.formNode
+        MNode formNode = formInstance.formNode
         String formName = eci.resourceFacade.expandNoL10n(formNode.attribute("name"), null)
-        ArrayList<ArrayList<MNode>> formListColumnList = formListInfo.getAllColInfo()
-        int numColumns = formListColumnList.size()
 
         // make POI workbook and sheet
         XSSFWorkbook wb = new XSSFWorkbook()
         XSSFSheet sheet = wb.createSheet(formName)
+        // render to the sheet
+        renderSheet(sheet)
+        // write file to stream
+        wb.write(os)
+        os.close()
+    }
+    void renderSheet(XSSFSheet sheet) {
+        // get form-list data
+        ScreenForm.FormListRenderInfo formListInfo = formInstance.makeFormListRenderInfo()
+        MNode formNode = formListInfo.formNode
+        ArrayList<ArrayList<MNode>> formListColumnList = formListInfo.getAllColInfo()
+        int numColumns = formListColumnList.size()
+
+        XSSFWorkbook wb = sheet.getWorkbook()
 
         CellStyle headerStyle = makeHeaderStyle(wb)
         CellStyle rowDefaultStyle = makeRowDefaultStyle(wb)
@@ -108,105 +118,176 @@ class FormListExcelRender {
         int listArraySize = listArray.size()
 
         for (int listIdx = 0; listIdx < listArraySize; listIdx++) {
-            Map<String, Object> rowMap = (Map<String, Object>) listArray.get(listIdx)
+            Map<String, Object> curRowMap = (Map<String, Object>) listArray.get(listIdx)
 
-            XSSFRow listRow = sheet.createRow(rowNum++)
-            colIndex = 0
+            eci.contextStack.push(curRowMap)
+            try {
+                XSSFRow listRow = sheet.createRow(rowNum++)
+                colIndex = 0
 
-            for (int i = 0; i < numColumns; i++) {
-                ArrayList<MNode> columnFieldList = (ArrayList<MNode>) formListColumnList.get(i)
-                for (int j = 0; j < columnFieldList.size(); j++) {
-                    MNode fieldNode = (MNode) columnFieldList.get(j)
-                    String fieldName = fieldNode.attribute("name")
+                for (int i = 0; i < numColumns; i++) {
+                    ArrayList<MNode> columnFieldList = (ArrayList<MNode>) formListColumnList.get(i)
+                    for (int j = 0; j < columnFieldList.size(); j++) {
+                        MNode fieldNode = (MNode) columnFieldList.get(j)
+                        // String fieldName = fieldNode.attribute("name")
 
-                    MNode defaultField = fieldNode.first("default-field")
-                    ArrayList<MNode> childList = defaultField.getChildren()
-                    int childListSize = childList.size()
+                        MNode defaultField = fieldNode.first("default-field")
+                        ArrayList<MNode> childList = defaultField.getChildren()
+                        int childListSize = childList.size()
 
-                    XSSFCell listCell = listRow.createCell(colIndex++)
+                        XSSFCell listCell = listRow.createCell(colIndex++)
 
-                    if (childListSize == 1) {
-                        // use data specific cell type and style
-                        MNode widgetNode = (MNode) childList.get(0)
-                        String widgetType = widgetNode.getName()
+                        if (childListSize == 1) {
+                            // use data specific cell type and style
+                            MNode widgetNode = (MNode) childList.get(0)
+                            String widgetType = widgetNode.getName()
 
-                        // TODO style by widget type, etc
-                        listCell.setCellStyle(rowDefaultStyle)
+                            Object curValue = getFieldValue(fieldNode, widgetNode)
 
-                        Object curValue = getFieldValue(fieldNode, widgetNode, rowMap)
+                            // cell type options are _NONE, BLANK, BOOLEAN, ERROR, FORMULA, NUMERIC, STRING
+                            // cell value options are: boolean, Date, Calendar, double, String, RichTextString
+                            if (curValue instanceof String) {
+                                listCell.setCellType(CellType.STRING)
+                                listCell.setCellValue((String) curValue)
 
-                        // cell type options are _NONE, BLANK, BOOLEAN, ERROR, FORMULA, NUMERIC, STRING
-                        // cell value options are: boolean, Date, Calendar, double, String, RichTextString
-                        if (curValue instanceof String) {
-                            listCell.setCellType(CellType.STRING)
-                            listCell.setCellValue((String) curValue)
-                        } else if (curValue instanceof Number) {
-                            listCell.setCellType(CellType.NUMERIC)
-                            listCell.setCellValue(((Number) curValue).doubleValue())
-                        } else if (curValue instanceof Date) {
-                            listCell.setCellType(CellType.STRING)
-                            listCell.setCellValue((Date) curValue)
-                        } else if (curValue != null) {
-                            listCell.setCellType(CellType.STRING)
-                            listCell.setCellValue(curValue.toString())
-                        }
-                    } else {
-                        // always use string with values from all child elements
-                        StringBuilder cellSb = new StringBuilder()
+                                listCell.setCellStyle(rowDefaultStyle)
+                            } else if (curValue instanceof Number) {
+                                listCell.setCellType(CellType.NUMERIC)
+                                listCell.setCellValue(((Number) curValue).doubleValue())
 
-                        for (int childIdx = 0; childIdx < childListSize; childIdx++) {
-                            MNode widgetNode = (MNode) childList.get(childIdx)
-                            Object curValue = getFieldValue(fieldNode, widgetNode, rowMap)
-                            if (curValue != null) {
-                                if (curValue instanceof String) {
-                                    cellSb.append((String) curValue)
+                                String currencyUnitField = widgetNode.attribute("currency-unit-field")
+                                if (currencyUnitField != null && !currencyUnitField.isEmpty()) {
+                                    listCell.setCellStyle(rowCurrencyStyle)
                                 } else {
-                                    String format = widgetNode.attribute("format")
-                                    String textFormat = widgetNode.attribute("text-format")
-                                    if (textFormat != null && !textFormat.isEmpty()) format = textFormat
-                                    cellSb.append(eci.l10nFacade.format(curValue, format))
+                                    listCell.setCellStyle(rowNumberStyle)
                                 }
-                            }
-                            if (childIdx < (childListSize - 1)) cellSb.append('\n')
-                        }
+                            } else if (curValue instanceof Date) {
+                                listCell.setCellType(CellType.STRING)
+                                listCell.setCellValue((Date) curValue)
 
-                        listCell.setCellStyle(rowDefaultStyle)
-                        listCell.setCellType(CellType.STRING)
-                        listCell.setCellValue(cellSb.toString())
+                                if (curValue instanceof java.sql.Date) {
+                                    listCell.setCellStyle(rowDateStyle)
+                                } else if (curValue instanceof java.sql.Time) {
+                                    listCell.setCellStyle(rowTimeStyle)
+                                } else {
+                                    listCell.setCellStyle(rowDateTimeStyle)
+                                }
+                            } else if (curValue != null) {
+                                listCell.setCellType(CellType.STRING)
+                                listCell.setCellValue(curValue.toString())
+
+                                listCell.setCellStyle(rowDefaultStyle)
+                            }
+
+                        } else {
+                            // always use string with values from all child elements
+                            StringBuilder cellSb = new StringBuilder()
+
+                            for (int childIdx = 0; childIdx < childListSize; childIdx++) {
+                                MNode widgetNode = (MNode) childList.get(childIdx)
+                                Object curValue = getFieldValue(fieldNode, widgetNode)
+                                if (curValue != null) {
+                                    if (curValue instanceof String) {
+                                        cellSb.append((String) curValue)
+                                    } else {
+                                        String format = widgetNode.attribute("format")
+                                        String textFormat = widgetNode.attribute("text-format")
+                                        if (textFormat != null && !textFormat.isEmpty()) format = textFormat
+                                        cellSb.append(eci.l10nFacade.format(curValue, format))
+                                    }
+                                }
+                                if (childIdx < (childListSize - 1)) cellSb.append('\n')
+                            }
+
+                            listCell.setCellStyle(rowDefaultStyle)
+                            listCell.setCellType(CellType.STRING)
+                            listCell.setCellValue(cellSb.toString())
+                        }
                     }
                 }
+            } finally {
+                eci.contextStack.pop()
             }
         }
-
-
-
-        // TODO? ========== footer row
-
-
-        // ========== output the result
-        wb.write(os)
-        os.close()
+        // TODO? something special for footer row
     }
 
-    Object getFieldValue(MNode fieldNode, MNode widgetNode, Map<String, Object> rowMap) {
+    Object getFieldValue(MNode fieldNode, MNode widgetNode) {
         String widgetType = widgetNode.getName()
         if (ignoreFieldElements.contains(widgetType)) return null
         String fieldName = fieldNode.attribute("name")
 
-        // TODO this whole section for the various widget types...
         // similar logic to widget types in DefaultScreenMacros.csv.ftl
+        // view oriented: link, display, display-entity
+        // edit oriented: check, drop-down, radio, date-time, text-area, text-line, text-find
+
+        String conditionAttr = widgetNode.attribute("condition")
+        if (conditionAttr != null && !conditionAttr.isEmpty() && !eci.resourceFacade.condition(conditionAttr, null))
+            return null
+
         Object value = null
-        if ("display".equals(widgetType)) {
+        if ("display".equals(widgetType) || "display-entity".equals(widgetType) || "link".equals(widgetType)) {
+            String entityName = widgetNode.attribute("entity-name")
+            String textAttr = widgetNode.attribute("text")
 
-        } else if ("display-entity".equals(widgetType)) {
+            if (entityName != null && !entityName.isEmpty()) {
+                Object fieldValue = eci.contextStack.getByString(fieldName)
+                if (fieldValue == null) return getDefaultText(widgetNode)
+                EntityDefinition ed = eci.entityFacade.getEntityDefinition(entityName)
 
-        } else if ("display".equals(widgetType)) {
+                // find the entity value
+                String keyFieldName = widgetNode.attribute("key-field-name")
+                if (keyFieldName == null || keyFieldName.isEmpty()) keyFieldName = widgetNode.attribute("entity-key-name")
+                if (keyFieldName == null || keyFieldName.isEmpty()) keyFieldName = ed.getPkFieldNames().get(0)
+                String useCache = widgetNode.attribute("use-cache") ?: widgetNode.attribute("entity-use-cache") ?: "true"
 
+                EntityValue ev = eci.entityFacade.find(entityName).condition(keyFieldName, fieldValue)
+                        .useCache(useCache == "true").one()
+                if (ev == null) return getDefaultText(widgetNode)
+
+                String text = (String) widgetNode.attribute("text")
+                if (text != null && text.length() > 0) {
+                    value = eci.resourceFacade.expand(text, null, ev.getMap())
+                } else {
+                    // get the value of the default description field for the entity
+                    String defaultDescriptionField = ed.getDefaultDescriptionField()
+                    if (defaultDescriptionField) value = ev.get(defaultDescriptionField)
+                }
+            } else if (textAttr != null && !textAttr.isEmpty()) {
+                String textMapAttr = widgetNode.attribute("text-map")
+                Object textMap = textMapAttr != null ? eci.resourceFacade.expression(textMapAttr, null) : null
+                if (textMap instanceof Map) {
+                    value = eci.resourceFacade.expand(textAttr, null, textMap)
+                } else {
+                    value = eci.resourceFacade.expand(textAttr, null)
+                }
+            } else {
+                value = eci.contextStack.getByString(fieldName)
+            }
+            if (value == null) {
+                String defaultText = widgetNode.attribute("default-text")
+                if (defaultText != null && defaultText.length() > 0)
+                    value = eci.resourceFacade.expand(defaultText, null)
+            }
+
+        /* FUTURE: widget types for interactive form-list, low priority for intended use
+        } else if ("drop-down".equals(widgetType) || "check".equals(widgetType) || "radio".equals(widgetType)) {
+        } else if ("link".equals(widgetType)) {
+        } else if ("text-area".equals(widgetType) || "text-line".equals(widgetType) || "text-find".equals(widgetType)) {
+         */
         } else {
-            value = rowMap.get(fieldName)
+            value = eci.contextStack.getByString(fieldName)
         }
 
         return value
+    }
+    protected String getDefaultText(MNode widgetNode) {
+        String defaultText = widgetNode.attribute("default-text")
+        if (defaultText != null && defaultText.length() > 0) {
+            return eci.resourceFacade.expand(defaultText, null)
+        } else {
+            return null
+        }
     }
 
     CellStyle makeHeaderStyle(Workbook wb) {
