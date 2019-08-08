@@ -230,8 +230,6 @@ class FormListExcelRender {
                                         cellSb.append((String) curValue)
                                     } else {
                                         String format = widgetNode.attribute("format")
-                                        String textFormat = widgetNode.attribute("text-format")
-                                        if (textFormat != null && !textFormat.isEmpty()) format = textFormat
                                         cellSb.append(eci.l10nFacade.format(curValue, format))
                                     }
                                 }

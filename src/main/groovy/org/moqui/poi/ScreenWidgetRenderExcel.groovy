@@ -28,6 +28,18 @@ import org.moqui.util.MNode
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+/**
+ * ScreenWidgetRender implementation to generate Excel (xlsx) file with a sheet for each form-list found on the screen.
+ *
+ * This can be used with the form-list.@show-xlsx-button attribute.
+ *
+ * To specify a link manually in a XML Screen do something like:
+ * <pre>
+ *         <link url="${sri.getScreenUrlInstance().getScreenOnlyPath()}" url-type="plain" text="XLS Export"
+ *                 parameter-map="ec.web.requestParameters + [saveFilename:('FinancialInfo_' + partyId + '.xlsx'),
+ *                     renderMode:'xlsx', pageNoLimit:'true', lastStandalone:'true']"/>
+ * </pre>
+ */
 @CompileStatic
 class ScreenWidgetRenderExcel implements ScreenWidgetRender {
     private static final Logger logger = LoggerFactory.getLogger(ScreenWidgetRenderExcel.class)
