@@ -132,7 +132,7 @@ class FormListExcelRender {
                 String headerTitle = headerField != null ? headerField.attribute("title") : null
                 if (headerTitle == null) headerTitle = defaultField != null ? defaultField.attribute("title") : null
                 if (headerTitle == null) headerTitle = StringUtilities.camelCaseToPretty(fieldNode.attribute("name"))
-                headerCell.setCellValue(headerTitle)
+                headerCell.setCellValue(eci.resourceFacade.expand(headerTitle, null))
             }
         }
         int sheetColCount = headerColIndex
