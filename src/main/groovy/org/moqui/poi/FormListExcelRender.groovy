@@ -22,6 +22,7 @@ import org.apache.poi.ss.usermodel.FillPatternType
 import org.apache.poi.ss.usermodel.Font
 import org.apache.poi.ss.usermodel.HorizontalAlignment
 import org.apache.poi.ss.usermodel.IndexedColors
+import org.apache.poi.ss.usermodel.VerticalAlignment
 import org.apache.poi.ss.util.DateFormatConverter
 import org.apache.poi.xssf.usermodel.XSSFCell
 import org.apache.poi.xssf.usermodel.XSSFCellStyle
@@ -50,7 +51,7 @@ class FormListExcelRender {
     private static final Logger logger = LoggerFactory.getLogger(FormListExcelRender.class)
 
     // ignore the same field elements as the DefaultScreenMacros.csv.ftl file
-    protected static Set<String> ignoreFieldElements = new HashSet<>(["ignored", "hidden", "submit", "image", "label",
+    protected static Set<String> ignoreFieldElements = new HashSet<>(["ignored", "hidden", "submit", "image",
             "date-find", "file", "password", "range-find", "reset"])
 
     protected ScreenForm.FormInstance formInstance
@@ -233,13 +234,17 @@ class FormListExcelRender {
                                         cellSb.append(eci.l10nFacade.format(curValue, format))
                                     }
                                 }
-                                if (childIdx < (childListSize - 1)) cellSb.append('\n')
+                                if (childIdx < (childListSize - 1) && cellSb.length() > 0 && cellSb.charAt(cellSb.length() - 1) != (char) '\n')
+                                    cellSb.append('\n')
                             }
 
                             listCell.setCellStyle(rowDefaultStyle)
                             listCell.setCellType(CellType.STRING)
                             listCell.setCellValue(cellSb.toString())
                         }
+
+                        // use -1 for row height to auto calculate (doesn't work in LibreOffice, works in Excel)
+                        listRow.setHeight((short) -1)
                     }
                 }
             } finally {
@@ -267,7 +272,7 @@ class FormListExcelRender {
             return null
 
         Object value = null
-        if ("display".equals(widgetType) || "display-entity".equals(widgetType) || "link".equals(widgetType)) {
+        if ("display".equals(widgetType) || "display-entity".equals(widgetType) || "link".equals(widgetType) || "label".equals(widgetType)) {
             String entityName = widgetNode.attribute("entity-name")
             String textAttr = widgetNode.attribute("text")
 
@@ -286,9 +291,8 @@ class FormListExcelRender {
                         .useCache(useCache == "true").one()
                 if (ev == null) return getDefaultText(widgetNode)
 
-                String text = (String) widgetNode.attribute("text")
-                if (text != null && text.length() > 0) {
-                    value = eci.resourceFacade.expand(text, null, ev.getMap())
+                if (textAttr != null && textAttr.length() > 0) {
+                    value = eci.resourceFacade.expand(textAttr, null, ev.getMap())
                 } else {
                     // get the value of the default description field for the entity
                     String defaultDescriptionField = ed.getDefaultDescriptionField()
@@ -313,7 +317,6 @@ class FormListExcelRender {
 
         /* FUTURE: widget types for interactive form-list, low priority for intended use
         } else if ("drop-down".equals(widgetType) || "check".equals(widgetType) || "radio".equals(widgetType)) {
-        } else if ("link".equals(widgetType)) {
         } else if ("text-area".equals(widgetType) || "text-line".equals(widgetType) || "text-find".equals(widgetType)) {
          */
         } else {
@@ -445,6 +448,7 @@ class FormListExcelRender {
         style.setBorderBottom(noBorder)
         style.setBorderLeft(noBorder)
         style.setBorderTop(noBorder)
+        style.setVerticalAlignment(VerticalAlignment.TOP)
         // logger.warn("created no border style ${style.properties}")
         return style
     }
