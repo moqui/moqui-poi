@@ -27,7 +27,7 @@ def frameworkDir = file(moquiDir.absolutePath + '/framework')
 apply plugin: 'com.github.ben-manes.versions'
 buildscript {
   repositories { jcenter() }
-  dependencies { classpath 'com.github.ben-manes:gradle-versions-plugin:0.21.0' }
+  dependencies { classpath 'com.github.ben-manes:gradle-versions-plugin:0.27.0' }
 }
 dependencyUpdates.resolutionStrategy = { componentSelection { rules -> rules.all { ComponentSelection selection ->
     boolean rejected = ['alpha', 'beta', 'rc', 'cr', 'm'].any { qualifier -> selection.candidate.version ==~ /(?i).*[.-]${qualifier}[.\d-]*/ }
@@ -47,9 +47,9 @@ dependencies {
     compile project(':framework')
 
     // Apache POI - Apache 2.0 - http://poi.apache.org/components/index.html
-    compile 'org.apache.poi:poi:4.1.0'
-    compile 'org.apache.poi:poi-ooxml:4.1.0'
-    compile 'org.apache.poi:poi-ooxml-schemas:4.1.0'
+    compile 'org.apache.poi:poi:4.1.1'
+    compile 'org.apache.poi:poi-ooxml:4.1.1'
+    compile 'org.apache.poi:poi-ooxml-schemas:4.1.1'
 }
 
 // by default the Java plugin runs test on build, change to not do that (only run test if explicit task)
