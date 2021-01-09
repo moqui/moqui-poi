@@ -14,22 +14,10 @@
 package org.moqui.poi
 
 import groovy.transform.CompileStatic
-import org.apache.poi.ss.usermodel.BorderStyle
-import org.apache.poi.ss.usermodel.CellStyle
-import org.apache.poi.ss.usermodel.CellType
-import org.apache.poi.ss.usermodel.DataFormat
-import org.apache.poi.ss.usermodel.FillPatternType
-import org.apache.poi.ss.usermodel.Font
-import org.apache.poi.ss.usermodel.HorizontalAlignment
-import org.apache.poi.ss.usermodel.IndexedColors
-import org.apache.poi.ss.usermodel.VerticalAlignment
+import org.apache.poi.ss.usermodel.*
 import org.apache.poi.ss.util.DateFormatConverter
-import org.apache.poi.xssf.usermodel.XSSFCell
-import org.apache.poi.xssf.usermodel.XSSFCellStyle
-import org.apache.poi.xssf.usermodel.XSSFRow
-import org.apache.poi.xssf.usermodel.XSSFSheet
-import org.apache.poi.xssf.usermodel.XSSFWorkbook
-
+import org.apache.poi.xssf.streaming.SXSSFSheet
+import org.apache.poi.xssf.streaming.SXSSFWorkbook
 import org.moqui.entity.EntityValue
 import org.moqui.impl.context.ExecutionContextImpl
 import org.moqui.impl.entity.EntityDefinition
@@ -37,7 +25,6 @@ import org.moqui.impl.screen.ScreenDefinition
 import org.moqui.impl.screen.ScreenForm
 import org.moqui.util.MNode
 import org.moqui.util.StringUtilities
-
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -61,7 +48,7 @@ class FormListExcelRender {
         ArrayList<ScreenForm> formList = sd.getAllForms()
 
         // make POI workbook for all sheets
-        XSSFWorkbook wb = new XSSFWorkbook()
+        Workbook wb = new SXSSFWorkbook()
 
         for (ScreenForm form in formList) {
             MNode formNode = form.getOrCreateFormNode()
@@ -70,7 +57,10 @@ class FormListExcelRender {
             ScreenForm.FormInstance formInstance = form.getFormInstance()
             String formName = eci.resourceFacade.expandNoL10n(formNode.attribute("name"), null)
 
-            XSSFSheet sheet = wb.createSheet(formName)
+            Sheet sheet = wb.createSheet(formName)
+            if (sheet instanceof SXSSFSheet) {
+                ((SXSSFSheet)sheet).trackAllColumnsForAutoSizing()
+            }
             FormListExcelRender fler = new FormListExcelRender(formInstance, eci)
             fler.renderSheet(sheet)
         }
@@ -90,22 +80,25 @@ class FormListExcelRender {
         String formName = eci.resourceFacade.expandNoL10n(formNode.attribute("name"), null)
 
         // make POI workbook and sheet
-        XSSFWorkbook wb = new XSSFWorkbook()
-        XSSFSheet sheet = wb.createSheet(formName)
+        Workbook wb = new SXSSFWorkbook()
+        Sheet sheet = wb.createSheet(formName)
+        if (sheet instanceof SXSSFSheet) {
+            ((SXSSFSheet)sheet).trackAllColumnsForAutoSizing()
+        }
         // render to the sheet
         renderSheet(sheet)
         // write file to stream
         wb.write(os)
         os.close()
     }
-    void renderSheet(XSSFSheet sheet) {
+    void renderSheet(Sheet sheet) {
         // get form-list data
         ScreenForm.FormListRenderInfo formListInfo = formInstance.makeFormListRenderInfo()
         // MNode formNode = formListInfo.formNode
         ArrayList<ArrayList<MNode>> formListColumnList = formListInfo.getAllColInfo()
         int numColumns = formListColumnList.size()
 
-        XSSFWorkbook wb = sheet.getWorkbook()
+        Workbook wb = sheet.getWorkbook()
 
         CellStyle headerStyle = makeHeaderStyle(wb)
         CellStyle rowDefaultStyle = makeRowDefaultStyle(wb)
@@ -119,13 +112,13 @@ class FormListExcelRender {
         int rowNum = 0
 
         // ========== header row
-        XSSFRow headerRow = sheet.createRow(rowNum++)
+        Row headerRow = sheet.createRow(rowNum++)
         int headerColIndex = 0
         for (int i = 0; i < numColumns; i++) {
             ArrayList<MNode> columnFieldList = (ArrayList<MNode>) formListColumnList.get(i)
             for (int j = 0; j < columnFieldList.size(); j++) {
                 MNode fieldNode = (MNode) columnFieldList.get(j)
-                XSSFCell headerCell = headerRow.createCell(headerColIndex++)
+                Cell headerCell = headerRow.createCell(headerColIndex++)
                 headerCell.setCellStyle(headerStyle)
 
                 MNode headerField = fieldNode.first("header-field")
@@ -156,7 +149,7 @@ class FormListExcelRender {
 
             eci.contextStack.push(curRowMap)
             try {
-                XSSFRow listRow = sheet.createRow(rowNum++)
+                Row listRow = sheet.createRow(rowNum++)
                 int colIndex = 0
 
                 for (int i = 0; i < numColumns; i++) {
@@ -170,7 +163,7 @@ class FormListExcelRender {
                         ArrayList<MNode> childList = defaultField.getChildren()
                         int childListSize = childList.size()
 
-                        XSSFCell listCell = listRow.createCell(colIndex++)
+                        Cell listCell = listRow.createCell(colIndex++)
 
                         if (childListSize == 1) {
                             // use data specific cell type and style
@@ -334,7 +327,7 @@ class FormListExcelRender {
         }
     }
 
-    CellStyle makeHeaderStyle(XSSFWorkbook wb) {
+    CellStyle makeHeaderStyle(Workbook wb) {
         Font headerFont = wb.createFont()
         headerFont.setBold(true)
 
@@ -347,7 +340,7 @@ class FormListExcelRender {
         return style
     }
 
-    CellStyle makeRowDefaultStyle(XSSFWorkbook wb) {
+    CellStyle makeRowDefaultStyle(Workbook wb) {
         Font rowFont = wb.createFont()
 
         CellStyle style = createNoBorderStyle(wb)
@@ -358,7 +351,7 @@ class FormListExcelRender {
         return style
     }
 
-    CellStyle makeRowDateTimeStyle(XSSFWorkbook wb) {
+    CellStyle makeRowDateTimeStyle(Workbook wb) {
         DataFormat df = wb.createDataFormat()
         Font rowFont = wb.createFont()
 
@@ -369,7 +362,7 @@ class FormListExcelRender {
 
         return style
     }
-    CellStyle makeRowDateStyle(XSSFWorkbook wb) {
+    CellStyle makeRowDateStyle(Workbook wb) {
         DataFormat df = wb.createDataFormat()
         Font rowFont = wb.createFont()
 
@@ -380,7 +373,7 @@ class FormListExcelRender {
 
         return style
     }
-    CellStyle makeRowTimeStyle(XSSFWorkbook wb) {
+    CellStyle makeRowTimeStyle(Workbook wb) {
         DataFormat df = wb.createDataFormat()
         Font rowFont = wb.createFont()
 
@@ -392,7 +385,7 @@ class FormListExcelRender {
         return style
     }
 
-    CellStyle makeRowNumberStyle(XSSFWorkbook wb) {
+    CellStyle makeRowNumberStyle(Workbook wb) {
         DataFormat df = wb.createDataFormat()
         Font rowFont = wb.createFont()
 
@@ -403,7 +396,7 @@ class FormListExcelRender {
 
         return style
     }
-    CellStyle makeRowNumberRightStyle(XSSFWorkbook wb) {
+    CellStyle makeRowNumberRightStyle(Workbook wb) {
         DataFormat df = wb.createDataFormat()
         Font rowFont = wb.createFont()
 
@@ -414,7 +407,7 @@ class FormListExcelRender {
 
         return style
     }
-    CellStyle makeRowCurrencyStyle(XSSFWorkbook wb) {
+    CellStyle makeRowCurrencyStyle(Workbook wb) {
         DataFormat df = wb.createDataFormat()
         Font rowFont = wb.createFont()
 
@@ -426,7 +419,7 @@ class FormListExcelRender {
         return style
     }
 
-    CellStyle createBorderedStyle(XSSFWorkbook wb){
+    CellStyle createBorderedStyle(Workbook wb){
         BorderStyle thin = BorderStyle.THIN
         short black = IndexedColors.BLACK.getIndex()
 
@@ -441,9 +434,9 @@ class FormListExcelRender {
         style.setTopBorderColor(black)
         return style
     }
-    CellStyle createNoBorderStyle(XSSFWorkbook wb) {
+    CellStyle createNoBorderStyle(Workbook wb) {
         BorderStyle noBorder = BorderStyle.NONE
-        XSSFCellStyle style = wb.createCellStyle()
+        CellStyle style = wb.createCellStyle()
         style.setBorderRight(noBorder)
         style.setBorderBottom(noBorder)
         style.setBorderLeft(noBorder)

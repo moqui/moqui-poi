@@ -14,15 +14,13 @@
 package org.moqui.poi
 
 import groovy.transform.CompileStatic
-import org.apache.poi.xssf.usermodel.XSSFSheet
-import org.apache.poi.xssf.usermodel.XSSFWorkbook
+import org.apache.poi.ss.usermodel.Sheet
+import org.apache.poi.ss.usermodel.Workbook
+import org.apache.poi.xssf.streaming.SXSSFSheet
+import org.apache.poi.xssf.streaming.SXSSFWorkbook
 import org.moqui.BaseArtifactException
 import org.moqui.impl.context.ExecutionContextImpl
-import org.moqui.impl.screen.ScreenDefinition
-import org.moqui.impl.screen.ScreenForm
-import org.moqui.impl.screen.ScreenRenderImpl
-import org.moqui.impl.screen.ScreenWidgetRender
-import org.moqui.impl.screen.ScreenWidgets
+import org.moqui.impl.screen.*
 import org.moqui.util.ContextStack
 import org.moqui.util.MNode
 import org.slf4j.Logger
@@ -55,10 +53,10 @@ class ScreenWidgetRenderExcel implements ScreenWidgetRender {
             cs.sri = sri
             OutputStream os = sri.getOutputStream()
 
-            XSSFWorkbook wb = (XSSFWorkbook) cs.getByString(workbookFieldName)
+            Workbook wb = (Workbook) cs.getByString(workbookFieldName)
             boolean createdWorkbook = false
             if (wb == null) {
-                wb = new XSSFWorkbook()
+                wb = new SXSSFWorkbook()
                 createdWorkbook = true
                 cs.put(workbookFieldName, wb)
             }
@@ -82,7 +80,7 @@ class ScreenWidgetRenderExcel implements ScreenWidgetRender {
         }
     }
 
-    static void renderSubNodes(MNode widgetsNode, ScreenRenderImpl sri, XSSFWorkbook workbook) {
+    static void renderSubNodes(MNode widgetsNode, ScreenRenderImpl sri, Workbook workbook) {
         ExecutionContextImpl eci = sri.ec
         ScreenDefinition sd = sri.getActiveScreenDef()
 
@@ -100,7 +98,10 @@ class ScreenWidgetRenderExcel implements ScreenWidgetRender {
 
                 ScreenForm.FormInstance formInstance = form.getFormInstance()
 
-                XSSFSheet sheet = workbook.createSheet(formName)
+                Sheet sheet = workbook.createSheet(formName)
+                if (sheet instanceof SXSSFSheet) {
+                    ((SXSSFSheet)sheet).trackAllColumnsForAutoSizing()
+                }
                 FormListExcelRender fler = new FormListExcelRender(formInstance, eci)
                 fler.renderSheet(sheet)
             } else if ("section".equals(nodeName)) {
