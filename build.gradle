@@ -14,28 +14,11 @@
 
 apply plugin: 'groovy'
 
-// sourceCompatibility = '1.8'
-// targetCompatibility = '1.8'
-
 def componentNode = parseComponent(project)
 version = componentNode.'@version'
 def jarBaseName = componentNode.'@name'
 def moquiDir = projectDir.parentFile.parentFile.parentFile
 def frameworkDir = file(moquiDir.absolutePath + '/framework')
-
-// to run use "gradle dependencyUpdates"
-apply plugin: 'com.github.ben-manes.versions'
-buildscript {
-    repositories {
-        mavenCentral()
-        maven { url = "https://plugins.gradle.org/m2/" }
-    }
-  dependencies { classpath 'com.github.ben-manes:gradle-versions-plugin:0.45.0' }
-}
-dependencyUpdates.resolutionStrategy = { componentSelection { rules -> rules.all { ComponentSelection selection ->
-    boolean rejected = ['alpha', 'beta', 'rc', 'cr', 'm'].any { qualifier -> selection.candidate.version ==~ /(?i).*[.-]${qualifier}[.\d-]*/ }
-    if (rejected) selection.reject('Release candidate')
-} } }
 
 repositories {
     flatDir name: 'localLib', dirs: frameworkDir.absolutePath + '/lib'
@@ -50,8 +33,8 @@ dependencies {
     implementation project(':framework')
 
     // Apache POI - Apache 2.0 - http://poi.apache.org/components/index.html
-    implementation 'org.apache.poi:poi:5.2.3'
-    implementation 'org.apache.poi:poi-ooxml:5.2.3'
+    implementation 'org.apache.poi:poi:5.5.1'
+    implementation 'org.apache.poi:poi-ooxml:5.5.1'
 }
 
 // by default the Java plugin runs test on build, change to not do that (only run test if explicit task)
